@@ -85,6 +85,7 @@
         <p x-show="getMyTodayCount() < 100" class="text-gray-400 text-sm">
           <span x-text="100 - getMyTodayCount()"></span> more to go
         </p>
+        <p class="text-gray-600 text-xs mt-2">⏱ <span x-text="countdown"></span> left today</p>
       </div>
 
       <!-- Quick Add -->
@@ -284,6 +285,7 @@
         customAmount: '',
         confirmReset: false,
         saving: false,
+        countdown: '',
         loading: false,
         lastUpdated: null,
         ticker: 0,
@@ -299,6 +301,10 @@
 
           // Tick every 10s to keep "last updated" label fresh
           setInterval(() => { this.ticker++ }, 10000)
+
+          // Countdown to Pacific midnight
+          this.updateCountdown()
+          setInterval(() => this.updateCountdown(), 1000)
 
           document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
@@ -408,6 +414,21 @@
             clearInterval(this._pollInterval)
             this._pollInterval = null
           }
+        },
+
+        updateCountdown() {
+          const parts = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'America/Los_Angeles',
+            hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+          }).formatToParts(new Date())
+          const h = parseInt(parts.find(p => p.type === 'hour').value)
+          const m = parseInt(parts.find(p => p.type === 'minute').value)
+          const s = parseInt(parts.find(p => p.type === 'second').value)
+          const rem = 86400 - (h * 3600 + m * 60 + s)
+          const rh = Math.floor(rem / 3600)
+          const rm = Math.floor((rem % 3600) / 60)
+          const rs = rem % 60
+          this.countdown = `${String(rh).padStart(2, '0')}:${String(rm).padStart(2, '0')}:${String(rs).padStart(2, '0')}`
         },
 
         getTodayKey() {
