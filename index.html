@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pushup Tracker</title>
+  <meta name="theme-color" content="#10b981">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>
+    [x-cloak] { display: none !important; }
+  </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+
+  <div x-data="pushupTracker()" x-init="init()" x-cloak>
+
+    <!-- Name Entry Screen -->
+    <div x-show="showNameEntry" class="min-h-screen flex items-center justify-center p-4">
+      <div class="w-full max-w-sm">
+        <div class="text-center mb-8">
+          <div class="text-6xl mb-4">💪</div>
+          <h1 class="text-3xl font-bold text-emerald-400">Pushup Tracker</h1>
+          <p class="text-gray-400 mt-2">100 pushups a day</p>
+        </div>
+        <div class="bg-gray-800 rounded-2xl p-6">
+          <p class="text-xl font-semibold mb-4 text-center">What's your name?</p>
+          <input
+            x-model="nameInput"
+            @keydown.enter="register()"
+            type="text"
+            placeholder="Enter your name..."
+            maxlength="50"
+            class="w-full bg-gray-700 rounded-xl px-4 py-3 text-white text-lg placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 mb-4"
+            autofocus>
+          <button
+            @click="register()"
+            :disabled="!nameInput.trim() || loading"
+            class="w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-700 disabled:text-gray-500 rounded-xl py-3 text-lg font-semibold transition">
+            <span x-show="!loading">Let's go! 🚀</span>
+            <span x-show="loading">Setting up...</span>
+          </button>
+          <p x-show="registerError" class="text-red-400 text-sm mt-3 text-center" x-text="registerError"></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main App -->
+    <div x-show="!showNameEntry" class="max-w-md mx-auto p-4 pb-8">
+
+      <!-- Header -->
+      <div class="flex items-center justify-between mb-1">
+        <h1 class="text-2xl font-bold text-emerald-400">💪 Pushup Tracker</h1>
+        <div class="flex items-center gap-2">
+          <div x-show="saving || loading" class="w-4 h-4 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin"></div>
+          <span class="bg-gray-800 px-3 py-1 rounded-full text-sm text-gray-300">
+            You: <span class="text-white font-medium" x-text="currentUser"></span>
+          </span>
+        </div>
+      </div>
+      <p x-show="lastUpdated" class="text-gray-600 text-xs text-right mb-4"
+        x-text="'Updated ' + formatLastUpdated()"></p>
+
+      <!-- Today's Card -->
+      <div class="bg-gray-800 rounded-2xl p-6 mb-4 text-center">
+        <p class="text-gray-400 text-sm mb-2">Your pushups today</p>
+        <div class="flex items-center justify-center gap-3 mb-4">
+          <span
+            :class="getMyTodayCount() >= 100 ? 'text-emerald-400' : 'text-white'"
+            class="text-7xl font-bold"
+            x-text="getMyTodayCount()">
+          </span>
+          <span x-show="getMyTodayCount() >= 100" class="text-4xl">✅</span>
+        </div>
+        <div class="w-full bg-gray-700 rounded-full h-3 mb-3">
+          <div
+            :style="'width: ' + Math.min(getMyTodayCount() / 100 * 100, 100) + '%'"
+            :class="getMyTodayCount() >= 100 ? 'bg-emerald-500' : 'bg-blue-500'"
+            class="h-3 rounded-full transition-all duration-500">
+          </div>
+        </div>
+        <p x-show="getMyTodayCount() >= 100" class="text-emerald-400 font-medium">Goal reached! 🔥</p>
+        <p x-show="getMyTodayCount() < 100" class="text-gray-400 text-sm">
+          <span x-text="100 - getMyTodayCount()"></span> more to go
+        </p>
+      </div>
+
+      <!-- Quick Add -->
+      <div class="bg-gray-800 rounded-2xl p-4 mb-4">
+        <p class="text-gray-400 text-xs mb-3">Quick add</p>
+        <div class="grid grid-cols-4 gap-2 mb-3">
+          <button @click="addPushups(10)" :disabled="saving"
+            class="bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded-xl py-3 font-bold transition text-sm">
+            +10
+          </button>
+          <button @click="addPushups(25)" :disabled="saving"
+            class="bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded-xl py-3 font-bold transition text-sm">
+            +25
+          </button>
+          <button @click="addPushups(50)" :disabled="saving"
+            class="bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded-xl py-3 font-bold transition text-sm">
+            +50
+          </button>
+          <button @click="addPushups(100)" :disabled="saving"
+            class="bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 rounded-xl py-3 font-bold transition text-sm">
+            +100
+          </button>
+        </div>
+        <div class="flex gap-2">
+          <input
+            x-model.number="customAmount"
+            @keydown.enter="addPushups(customAmount); customAmount = ''"
+            type="number"
+            min="1"
+            placeholder="Custom amount"
+            class="flex-1 bg-gray-700 rounded-xl px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+          <button
+            @click="addPushups(customAmount); customAmount = ''"
+            :disabled="!customAmount || saving"
+            class="bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 px-5 rounded-xl font-medium transition">
+            Add
+          </button>
+        </div>
+        <div class="flex justify-end mt-3">
+          <span x-show="!confirmReset">
+            <button @click="confirmReset = true"
+              class="text-xs text-gray-600 hover:text-red-400 transition">
+              Reset today to 0
+            </button>
+          </span>
+          <span x-show="confirmReset" class="flex items-center gap-3 text-xs">
+            <span class="text-gray-400">Reset to 0?</span>
+            <button @click="resetToday()"
+              class="text-red-400 hover:text-red-300 font-semibold transition">
+              Yes, reset
+            </button>
+            <button @click="confirmReset = false"
+              class="text-gray-500 hover:text-gray-300 transition">
+              Cancel
+            </button>
+          </span>
+        </div>
+      </div>
+
+      <!-- Everyone Today -->
+      <div class="bg-gray-800 rounded-2xl p-4 mb-4">
+        <h2 class="text-base font-semibold mb-3 text-gray-200">Everyone Today</h2>
+        <div class="space-y-2">
+          <template x-for="person in getEveryoneToday()" :key="person.name">
+            <div class="flex items-center gap-3">
+              <span
+                class="text-sm font-medium w-24 truncate shrink-0"
+                :class="person.name === currentUser ? 'text-emerald-400' : 'text-gray-300'"
+                x-text="person.name">
+              </span>
+              <div class="flex-1 bg-gray-700 rounded-full h-2">
+                <div
+                  :style="'width: ' + Math.min(person.count / 100 * 100, 100) + '%'"
+                  :class="person.count >= 100 ? 'bg-emerald-500' : 'bg-blue-500'"
+                  class="h-2 rounded-full transition-all duration-500">
+                </div>
+              </div>
+              <div class="w-16 text-right shrink-0">
+                <span x-show="person.count >= 100" class="text-emerald-400 font-semibold text-sm">
+                  ✅ <span x-text="person.count"></span>
+                </span>
+                <span x-show="person.count < 100" class="text-gray-400 text-sm"
+                  x-text="person.count > 0 ? person.count : '—'">
+                </span>
+              </div>
+              <div class="w-10 text-right shrink-0">
+                <span x-show="person.streak > 0" class="text-orange-400 text-xs font-semibold"
+                  x-text="'🔥' + person.streak">
+                </span>
+                <span x-show="person.streak === 0" class="text-gray-600 text-xs">—</span>
+              </div>
+            </div>
+          </template>
+          <p x-show="getEveryoneToday().length === 0" class="text-gray-500 text-center py-2 text-sm">
+            No one here yet
+          </p>
+        </div>
+        <p class="text-gray-600 text-xs mt-3">🔥 = current streak of consecutive days hitting 100</p>
+      </div>
+
+      <!-- This Week -->
+      <div class="bg-gray-800 rounded-2xl p-4 mb-4">
+        <h2 class="text-base font-semibold mb-3 text-gray-200">This Week</h2>
+        <div class="space-y-2">
+          <template x-for="day in getWeekDays()" :key="day.date">
+            <div class="flex items-start gap-3" :class="day.isFuture ? 'opacity-40' : ''">
+              <div class="w-14 shrink-0 pt-0.5">
+                <p class="text-xs font-semibold"
+                  :class="day.isToday ? 'text-emerald-400' : 'text-gray-400'"
+                  x-text="day.label">
+                </p>
+                <p class="text-xs text-gray-600" x-text="day.shortDate"></p>
+              </div>
+              <div class="flex flex-wrap gap-1.5 flex-1">
+                <template x-for="u in day.users" :key="u.name">
+                  <span
+                    class="text-xs px-2 py-0.5 rounded-full font-medium"
+                    :class="u.count >= 100 ? 'bg-emerald-900 text-emerald-300' : u.count > 0 ? 'bg-blue-900 text-blue-300' : 'bg-gray-700 text-gray-500'"
+                    x-text="u.name.split(' ')[0] + ': ' + (u.count >= 100 ? '✅' : (u.count || '—'))">
+                  </span>
+                </template>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <!-- Calendar -->
+      <div class="bg-gray-800 rounded-2xl p-4">
+        <h2 class="text-base font-semibold mb-3 text-gray-200" x-text="getMonthName()"></h2>
+
+        <!-- Day headers (Sun–Sat) -->
+        <div class="grid grid-cols-7 gap-1 mb-1">
+          <div class="text-center text-xs text-gray-600 font-medium py-1">S</div>
+          <div class="text-center text-xs text-gray-600 font-medium py-1">M</div>
+          <div class="text-center text-xs text-gray-600 font-medium py-1">T</div>
+          <div class="text-center text-xs text-gray-600 font-medium py-1">W</div>
+          <div class="text-center text-xs text-gray-600 font-medium py-1">T</div>
+          <div class="text-center text-xs text-gray-600 font-medium py-1">F</div>
+          <div class="text-center text-xs text-gray-600 font-medium py-1">S</div>
+        </div>
+
+        <!-- Calendar grid -->
+        <div class="grid grid-cols-7 gap-1">
+          <template x-for="(cell, i) in getCalendarData()" :key="i">
+            <div
+              class="rounded-lg p-1 min-h-10 flex flex-col"
+              :class="cell.empty ? '' : (cell.isToday ? 'bg-gray-700 ring-1 ring-emerald-500' : 'bg-gray-700 bg-opacity-40')">
+              <template x-if="!cell.empty">
+                <div>
+                  <p class="text-xs font-medium mb-1"
+                    :class="cell.isToday ? 'text-emerald-400' : 'text-gray-500'"
+                    x-text="cell.day">
+                  </p>
+                  <div class="flex flex-wrap gap-0.5">
+                    <template x-for="dot in cell.dots" :key="dot.name">
+                      <div
+                        class="w-2 h-2 rounded-full"
+                        :class="dot.color"
+                        :title="dot.name + ': ' + dot.count">
+                      </div>
+                    </template>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </template>
+        </div>
+
+        <!-- Legend -->
+        <div class="flex gap-4 mt-3 text-xs text-gray-500">
+          <span class="flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span> ≥100
+          </span>
+          <span class="flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-yellow-500 inline-block"></span> 1–99
+          </span>
+          <span class="flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-gray-600 inline-block"></span> 0
+          </span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    function pushupTracker() {
+      const savedUser = localStorage.getItem('pushupUser')
+
+      return {
+        currentUser: savedUser || '',
+        nameInput: '',
+        registerError: '',
+        showNameEntry: !savedUser,
+        apiData: { people: [], data: {} },
+        customAmount: '',
+        confirmReset: false,
+        saving: false,
+        loading: false,
+        lastUpdated: null,
+        ticker: 0,
+        _pollInterval: null,
+
+        async init() {
+          if (!this.showNameEntry) {
+            this.loading = true
+            await this.fetchData()
+            this.loading = false
+            this.startPolling()
+          }
+
+          // Tick every 10s to keep "last updated" label fresh
+          setInterval(() => { this.ticker++ }, 10000)
+
+          document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+              this.fetchData()
+              this.startPolling()
+            } else {
+              this.stopPolling()
+            }
+          })
+        },
+
+        async register() {
+          const name = this.nameInput.trim()
+          if (!name) return
+          this.loading = true
+          this.registerError = ''
+          try {
+            const res = await fetch('api.php', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'register', name })
+            })
+            const json = await res.json()
+            if (json.error) {
+              this.registerError = json.error
+              return
+            }
+            this.currentUser = name
+            localStorage.setItem('pushupUser', name)
+            this.showNameEntry = false
+            await this.fetchData()
+            this.startPolling()
+          } catch (e) {
+            this.registerError = 'Could not connect to server'
+          } finally {
+            this.loading = false
+          }
+        },
+
+        async fetchData() {
+          try {
+            const res = await fetch('api.php?action=data')
+            this.apiData = await res.json()
+            this.lastUpdated = new Date()
+          } catch (e) {
+            console.error('Failed to fetch data', e)
+          }
+        },
+
+        async addPushups(amount) {
+          amount = Number(amount)
+          if (!amount || amount <= 0 || this.saving) return
+          this.saving = true
+          this.customAmount = ''
+
+          // Optimistic update — show the new count immediately without waiting for the network
+          const today = this.getTodayKey()
+          if (!this.apiData.data[this.currentUser]) this.apiData.data[this.currentUser] = {}
+          this.apiData.data[this.currentUser][today] = (this.apiData.data[this.currentUser][today] || 0) + amount
+
+          try {
+            await fetch('api.php', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'add', name: this.currentUser, amount })
+            })
+            await this.fetchData() // reconcile with server truth
+          } catch (e) {
+            console.error('Add pushups failed', e)
+            await this.fetchData() // revert optimistic update on error
+          } finally {
+            this.saving = false
+          }
+        },
+
+        async resetToday() {
+          this.confirmReset = false
+          this.saving = true
+          const today = this.getTodayKey()
+          if (this.apiData.data[this.currentUser]) {
+            this.apiData.data[this.currentUser][today] = 0
+          }
+          try {
+            await fetch('api.php', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'reset', name: this.currentUser })
+            })
+            await this.fetchData()
+          } catch (e) {
+            console.error('Reset failed', e)
+            await this.fetchData()
+          } finally {
+            this.saving = false
+          }
+        },
+
+        startPolling() {
+          this.stopPolling()
+          this._pollInterval = setInterval(() => {
+            if (document.visibilityState === 'visible') this.fetchData()
+          }, 120000)
+        },
+
+        stopPolling() {
+          if (this._pollInterval) {
+            clearInterval(this._pollInterval)
+            this._pollInterval = null
+          }
+        },
+
+        getTodayKey() {
+          // Pacific time is the shared day boundary for all users
+          return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' })
+        },
+
+        getMyTodayCount() {
+          const today = this.getTodayKey()
+          return this.apiData.data?.[this.currentUser]?.[today] || 0
+        },
+
+        getEveryoneToday() {
+          const today = this.getTodayKey()
+          return (this.apiData.people || []).map(name => ({
+            name,
+            count: this.apiData.data?.[name]?.[today] || 0,
+            streak: this.apiData.streaks?.[name] || 0
+          })).sort((a, b) => b.count - a.count)
+        },
+
+        getWeekDays() {
+          const todayStr = this.getTodayKey()
+          const [ty, tm, td] = todayStr.split('-').map(Number)
+          const today = new Date(ty, tm - 1, td, 12) // noon local — safe for day arithmetic
+          const dow = today.getDay() // 0=Sun
+          const monday = new Date(today)
+          monday.setDate(today.getDate() - (dow === 0 ? 6 : dow - 1))
+
+          const days = []
+          for (let i = 0; i < 7; i++) {
+            const d = new Date(monday)
+            d.setDate(monday.getDate() + i)
+            const dateStr = d.toISOString().split('T')[0]
+            days.push({
+              date: dateStr,
+              label: d.toLocaleDateString('en-US', { weekday: 'short' }),
+              shortDate: (d.getMonth() + 1) + '/' + d.getDate(),
+              isToday: dateStr === todayStr,
+              isFuture: dateStr > todayStr,
+              users: (this.apiData.people || []).map(name => ({
+                name,
+                count: this.apiData.data?.[name]?.[dateStr] || 0
+              }))
+            })
+          }
+          return days
+        },
+
+        getCalendarData() {
+          const todayStr = this.getTodayKey()
+          const [yearNum, monthNum] = todayStr.split('-').map(Number)
+          const year = yearNum
+          const month = monthNum - 1 // 0-indexed
+          const daysInMonth = new Date(year, month + 1, 0).getDate()
+          const startDay = new Date(year, month, 1).getDay() // 0=Sun
+
+          const cells = []
+          for (let i = 0; i < startDay; i++) {
+            cells.push({ empty: true })
+          }
+          for (let d = 1; d <= daysInMonth; d++) {
+            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+            cells.push({
+              empty: false,
+              day: d,
+              date: dateStr,
+              isToday: dateStr === todayStr,
+              dots: (this.apiData.people || []).map(name => {
+                const count = this.apiData.data?.[name]?.[dateStr] || 0
+                return {
+                  name,
+                  count,
+                  color: count >= 100 ? 'bg-emerald-500' : count > 0 ? 'bg-yellow-500' : 'bg-gray-600'
+                }
+              })
+            })
+          }
+          return cells
+        },
+
+        getMonthName() {
+          const [y, m] = this.getTodayKey().split('-').map(Number)
+          return new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+        },
+
+        formatLastUpdated() {
+          void this.ticker // trigger reactivity on ticker change
+          if (!this.lastUpdated) return ''
+          const secs = Math.round((new Date() - this.lastUpdated) / 1000)
+          if (secs < 10) return 'just now'
+          if (secs < 60) return `${secs}s ago`
+          return `${Math.round(secs / 60)}m ago`
+        }
+      }
+    }
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js')
+    }
+  </script>
+</body>
+</html>
