@@ -1,0 +1,5 @@
+---
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/flexgrip/public_html/fission.red/pushup-tracker/
+    - /bin/cp -R * $DEPLOYPATH
